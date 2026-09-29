@@ -516,6 +516,30 @@ h1 {
     border-top: 1px solid var(--line);
     min-height: 30px;
 }
+.card-footer { gap: 10px; }
+.owner {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 0;
+    font-size: 0.78rem;
+    font-weight: 500;
+    color: var(--text-2);
+}
+.owner-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 110px; }
+.avatar {
+    width: 20px;
+    height: 20px;
+    flex: none;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 0.6rem;
+    font-weight: 700;
+    letter-spacing: 0;
+}
 .docs-link {
     display: inline-flex;
     align-items: center;

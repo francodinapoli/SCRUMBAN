@@ -87,6 +87,7 @@ settings.wip = Object.assign({ ready: 5, 'in-progress': 3, testing: 4 }, setting
 let currentView = 'board';
 let currentProjectId = 'all';
 let currentSprintId = 'all';
+let currentOwner = 'all'; // 'all' | '__none' | nombre
 let searchQuery = '';
 let editingTaskId = null;
 let editingSprintId = null;
@@ -103,7 +104,7 @@ function seedDemo() {
     const mk = (i, o) => Object.assign({
         id: 't-demo' + i, title: '', desc: '', priority: 'medium', points: '3', status: 'backlog',
         docsLink: '', synced: false, projectId: 'p-default', sprintId: 's-none',
-        tags: [], due: '', blocked: false, createdAt: t - 3 * DAY, startedAt: null, doneAt: null, order: i
+        owner: '', tags: [], due: '', blocked: false, createdAt: t - 3 * DAY, startedAt: null, doneAt: null, order: i
     }, o);
     tasks = [
         mk(1, { title: 'Redactar documentación de la API', desc: 'Primera versión de la documentación GraphQL para la integración con Monday.', priority: 'high', points: '5', status: 'in-progress', sprintId: 's-1', tags: ['docs', 'api'], startedAt: t - 2 * DAY, synced: true }),
@@ -144,6 +145,7 @@ function normalize() {
             synced: !!t.synced,
             projectId: projects.find(p => p.id === t.projectId) ? t.projectId : projects[0].id,
             sprintId: sprints.find(s => s.id === t.sprintId) ? t.sprintId : 's-none',
+            owner: String(t.owner || '').trim().slice(0, 40),
             tags: Array.isArray(t.tags) ? t.tags.map(String).slice(0, 5) : [],
             due: isDay(t.due) ? t.due : '',
             blocked: !!t.blocked,
@@ -205,11 +207,20 @@ function wouldExceed(status, task) {
     return globalCount(status) >= lim;
 }
 
+/* ---------- Responsables ---------- */
+const ownerList = () => [...new Set(tasks.map(t => t.owner).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'es'));
+const initials = n => n.split(/\s+/).filter(Boolean).slice(0, 2).map(w => Array.from(w)[0]).join('').toUpperCase();
+function ownerHue(n) { let x = 0; for (const c of n) x = (x * 31 + c.charCodeAt(0)) % 360; return x; }
+function avatarEl(name) {
+    return h('span', { class: 'avatar', style: `background:hsl(${ownerHue(name)} 55% 46%)`, 'aria-hidden': 'true', text: initials(name) });
+}
+
 /* ---------- Filtros ---------- */
 function scopeTasks() {
     return tasks.filter(t =>
         (currentProjectId === 'all' || t.projectId === currentProjectId) &&
-        (currentSprintId === 'all' || t.sprintId === currentSprintId));
+        (currentSprintId === 'all' || t.sprintId === currentSprintId) &&
+        (currentOwner === 'all' || (currentOwner === '__none' ? !t.owner : t.owner === currentOwner)));
 }
 
 function visibleTasks() {
@@ -219,6 +230,7 @@ function visibleTasks() {
     return list.filter(t =>
         t.title.toLowerCase().includes(q) ||
         t.desc.toLowerCase().includes(q) ||
+        t.owner.toLowerCase().includes(q) ||
         t.tags.some(g => g.toLowerCase().includes(q)));
 }
 
@@ -302,6 +314,14 @@ function renderSelectors() {
     if (currentSprintId !== 'all' && !sprints.find(s => s.id === currentSprintId)) currentSprintId = 'all';
     fillSelect($('#projectSelector'), projects, currentProjectId, 'Todos los proyectos');
     fillSelect($('#sprintSelector'), sprints, currentSprintId, 'Todos los sprints');
+
+    const owners = ownerList();
+    const hasUnassigned = tasks.some(t => !t.owner);
+    if (currentOwner !== 'all' && !(currentOwner === '__none' ? hasUnassigned : owners.includes(currentOwner))) currentOwner = 'all';
+    const ownerOpts = owners.map(o => ({ id: o, name: o }));
+    if (hasUnassigned && owners.length) ownerOpts.push({ id: '__none', name: 'Sin asignar' });
+    fillSelect($('#ownerSelector'), ownerOpts, currentOwner, 'Todos los responsables');
+    $('#ownerList').replaceChildren(...owners.map(o => h('option', { value: o })));
     $('#deleteProjectBtn').hidden = currentProjectId === 'all' || projects.length < 2;
     const sprintPicked = currentSprintId !== 'all' && currentSprintId !== 's-none';
     $('#editSprintBtn').hidden = !sprintPicked;
@@ -405,6 +425,7 @@ function cardEl(t) {
 
     const url = safeUrl(t.docsLink);
     const footer = h('div', { class: 'card-footer' });
+    if (t.owner) footer.append(h('span', { class: 'owner', title: 'Responsable: ' + t.owner }, avatarEl(t.owner), h('span', { class: 'owner-name', text: t.owner })));
     if (url) footer.append(h('a', { class: 'docs-link', href: url, target: '_blank', rel: 'noopener noreferrer', title: 'Abrir documento', html: ICON_DOC + ' Docs' }));
     footer.append(h('button', {
         type: 'button', class: 'delete-btn', title: 'Eliminar tarea', 'aria-label': 'Eliminar tarea', html: ICON_TRASH,
@@ -525,6 +546,7 @@ function openTask(id) {
         $('#fProject').value = t.projectId;
         $('#fSprint').value = t.sprintId;
         $('#fDue').value = t.due;
+        $('#fOwner').value = t.owner;
         $('#fTags').value = t.tags.join(', ');
         $('#fDocs').value = t.docsLink;
         $('#fBlocked').checked = t.blocked;
@@ -532,6 +554,7 @@ function openTask(id) {
         $('#fStatus').value = 'backlog';
         $('#fProject').value = currentProjectId !== 'all' ? currentProjectId : projects[0].id;
         $('#fSprint').value = currentSprintId !== 'all' ? currentSprintId : 's-none';
+        if (currentOwner !== 'all' && currentOwner !== '__none') $('#fOwner').value = currentOwner;
     }
     openModal('taskModal');
     setTimeout(() => $('#fTitle').focus(), 50);
@@ -567,6 +590,7 @@ function submitTask(e) {
         projectId: $('#fProject').value,
         sprintId: $('#fSprint').value,
         due: $('#fDue').value,
+        owner: $('#fOwner').value.trim().replace(/\s+/g, ' ').slice(0, 40),
         tags: parseTags($('#fTags').value),
         docsLink: $('#fDocs').value.trim(),
         blocked: $('#fBlocked').checked
@@ -858,7 +882,7 @@ function renderDocs() {
         h('div', { class: 'doc-icon', html: ICON_DOC }),
         h('div', { class: 'doc-main' },
             h('div', { class: 'doc-title', text: t.title }),
-            h('div', { class: 'doc-meta', text: `${projName(t.projectId)} · ${STATUSES.find(s => s.id === t.status).name}` })),
+            h('div', { class: 'doc-meta', text: `${projName(t.projectId)} · ${STATUSES.find(s => s.id === t.status).name}${t.owner ? ' · ' + t.owner : ''}` })),
         h('div', { class: 'doc-actions' },
             h('button', { type: 'button', class: 'btn secondary small', text: 'Editar', onclick: () => openTask(t.id) }),
             h('a', { class: 'btn primary small', href: safeUrl(t.docsLink), target: '_blank', rel: 'noopener noreferrer', text: 'Abrir' }))))));
@@ -950,6 +974,7 @@ function importFile(file) {
         normalize();
         currentProjectId = 'all';
         currentSprintId = 'all';
+        currentOwner = 'all';
         saveAll();
         refresh();
         toast('Datos importados');
@@ -988,6 +1013,7 @@ function bindEvents() {
 
     $('#projectSelector').addEventListener('change', e => { currentProjectId = e.target.value; refresh(); });
     $('#sprintSelector').addEventListener('change', e => { currentSprintId = e.target.value; refresh(); });
+    $('#ownerSelector').addEventListener('change', e => { currentOwner = e.target.value; refresh(); });
     $('#search').addEventListener('input', e => { searchQuery = e.target.value; refresh(); });
 
     $('#taskForm').addEventListener('submit', submitTask);

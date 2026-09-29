@@ -73,6 +73,10 @@
                 </div>
 
                 <div class="pill-group">
+                    <select id="ownerSelector" aria-label="Responsable"></select>
+                </div>
+
+                <div class="pill-group">
                     <select id="sprintSelector" aria-label="Sprint"></select>
                     <button id="addSprintBtn" class="icon-btn" title="Nuevo sprint" aria-label="Nuevo sprint">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
@@ -218,6 +222,11 @@
                     <label for="fSprint">Sprint</label>
                     <select id="fSprint" required></select>
                 </div>
+            </div>
+            <div class="field">
+                <label for="fOwner">Responsable</label>
+                <input type="text" id="fOwner" list="ownerList" maxlength="40" placeholder="Nombre de quien la lleva adelante">
+                <datalist id="ownerList"></datalist>
             </div>
             <div class="field-row">
                 <div class="field">
